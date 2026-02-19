@@ -179,7 +179,8 @@ async function checkLastShoppingMissing(listId, listName) {
     if (!history.length) return false;
     const latest = history[0]; // newest first
     const detail = await get(`/api/history/${latest.id}`);
-    const missing = (detail.items || []).filter(i => i.checked === 2 && i.product_name);
+    // remaining = anything NOT marked as found (unchecked=0 or not-found=2)
+    const missing = (detail.items || []).filter(i => i.checked !== 1 && i.product_name);
     if (!missing.length) return false;
     openSuggestModal(listId, listName, missing, latest.list_name, latest.completed_at);
     return true;
@@ -234,12 +235,12 @@ document.getElementById('btn-confirm-suggestions').addEventListener('click', asy
   openListDetail(listId, listName);
 });
 
-// Skip suggestion → go straight to list
-document.querySelector('[data-modal="modal-suggest-items"].btn-cancel')
-  ?.addEventListener('click', () => {
-    const el = document.getElementById('modal-suggest-items');
-    openListDetail(parseInt(el.dataset.listId), el.dataset.listName);
-  });
+// Skip suggestion → close modal and go straight to list
+document.getElementById('btn-skip-suggestions').addEventListener('click', () => {
+  const el = document.getElementById('modal-suggest-items');
+  closeModal('modal-suggest-items');
+  openListDetail(parseInt(el.dataset.listId), el.dataset.listName);
+});
 
 // ═══════════════════════════════════════════════════════
 //  LIST DETAIL VIEW
@@ -498,7 +499,7 @@ async function addCustomItem() {
 
 // ─── Complete List ────────────────────────────────────
 document.getElementById('btn-complete-list').addEventListener('click', () => {
-  showConfirm('לסיים ולשמור את הקנייה?', async () => {
+  showConfirm('לארכב את הרשימה?', async () => {
     try {
       await post(`/api/lists/${state.currentListId}/complete`, {});
       showToast('הקנייה הושלמה ונשמרה בהיסטוריה!', 'success');
