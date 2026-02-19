@@ -1,0 +1,876 @@
+/* ===================================================
+   Family Cart – app.js
+   Vanilla JS SPA – no framework, no build step
+   =================================================== */
+
+'use strict';
+
+// ─── State ────────────────────────────────────────────
+const state = {
+  currentView: 'lists',
+  currentListId: null,
+  currentListName: '',
+  categories: [],
+  catalogFilter: { search: '', categoryId: null },
+  confirmCallback: null,
+  addItemPendingProduct: null, // { id, name_he, name, default_unit, default_quantity }
+};
+
+// ─── API helpers ──────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body && !(body instanceof FormData)) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  } else if (body instanceof FormData) {
+    opts.body = body;
+  }
+  const res = await fetch(path, opts);
+  let data;
+  try { data = await res.json(); } catch { data = {}; }
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+const get    = (path)         => api('GET',    path);
+const post   = (path, body)   => api('POST',   path, body);
+const put    = (path, body)   => api('PUT',    path, body);
+const del    = (path)         => api('DELETE', path);
+
+// ─── Toast ─────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast${type ? ' ' + type : ''}`;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ─── Modal helpers ────────────────────────────────────
+function openModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+function closeAllModals() {
+  document.querySelectorAll('.modal-overlay').forEach(m => m.classList.add('hidden'));
+}
+
+// ─── Navigation ───────────────────────────────────────
+function navigate(view) {
+  // Hide list-detail view & show nav when switching main tabs
+  if (view !== 'list-detail') {
+    state.currentListId = null;
+    document.getElementById('btn-back').classList.add('hidden');
+    document.getElementById('header-title').textContent = 'עגלת המשפחה';
+    document.querySelectorAll('.bottom-nav .nav-item').forEach(b => {
+      b.classList.toggle('active', b.dataset.view === view);
+    });
+  }
+
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const viewEl = document.getElementById(`view-${view}`);
+  if (viewEl) viewEl.classList.add('active');
+  state.currentView = view;
+
+  // Load data for view
+  if (view === 'lists')      loadLists();
+  if (view === 'catalog')    loadCatalog();
+  if (view === 'categories') loadCategories();
+  if (view === 'history')    loadHistory();
+}
+
+function openListDetail(listId, listName) {
+  state.currentListId = listId;
+  state.currentListName = listName;
+  document.getElementById('header-title').textContent = listName;
+  document.getElementById('btn-back').classList.remove('hidden');
+  document.querySelectorAll('.bottom-nav .nav-item').forEach(b => b.classList.remove('active'));
+  navigate('list-detail');
+  loadListDetail(listId);
+}
+
+// ─── Date formatting ──────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' });
+}
+
+// ─── Product display name ─────────────────────────────
+function productLabel(p) {
+  return p.name_he || p.name || 'מוצר';
+}
+
+// ═══════════════════════════════════════════════════════
+//  LISTS VIEW
+// ═══════════════════════════════════════════════════════
+async function loadLists() {
+  const cont = document.getElementById('lists-container');
+  cont.innerHTML = '<div class="loading">טוען...</div>';
+  try {
+    const lists = await get('/api/lists');
+    if (!lists.length) {
+      cont.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">🛒</div>
+          <p>אין רשימות עדיין</p>
+          <p class="text-muted">לחץ + כדי ליצור רשימה חדשה</p>
+        </div>`;
+      return;
+    }
+    cont.innerHTML = '';
+    lists.forEach(list => {
+      const checked = list.checked_count ?? 0;
+      const total   = list.item_count    ?? 0;
+      const card = document.createElement('div');
+      card.className = 'list-card';
+      card.innerHTML = `
+        <div class="list-card-title">${esc(list.name)}</div>
+        <div class="list-card-meta">
+          <span class="list-card-badge">${checked}/${total} פריטים</span>
+          <span>${fmtDate(list.created_at)}</span>
+        </div>`;
+      card.addEventListener('click', () => openListDetail(list.id, list.name));
+      cont.appendChild(card);
+    });
+  } catch (e) {
+    cont.innerHTML = `<div class="loading">שגיאה בטעינה: ${esc(e.message)}</div>`;
+  }
+}
+
+// ─── New List Modal ───────────────────────────────────
+document.getElementById('fab-new-list').addEventListener('click', () => {
+  document.getElementById('new-list-name').value = '';
+  openModal('modal-new-list');
+  setTimeout(() => document.getElementById('new-list-name').focus(), 100);
+});
+
+document.getElementById('btn-create-list').addEventListener('click', async () => {
+  const name = document.getElementById('new-list-name').value.trim();
+  if (!name) { showToast('נא להזין שם לרשימה', 'error'); return; }
+  try {
+    const list = await post('/api/lists', { name });
+    closeModal('modal-new-list');
+    showToast('הרשימה נוצרה', 'success');
+    openListDetail(list.id, list.name);
+  } catch (e) {
+    showToast(`שגיאה: ${e.message}`, 'error');
+  }
+});
+
+document.getElementById('new-list-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-create-list').click();
+});
+
+// ═══════════════════════════════════════════════════════
+//  LIST DETAIL VIEW
+// ═══════════════════════════════════════════════════════
+async function loadListDetail(listId) {
+  const cont = document.getElementById('list-items-container');
+  cont.innerHTML = '<div class="loading">טוען פריטים...</div>';
+  updateProgress(0, 0);
+  document.getElementById('item-search-input').value = '';
+  document.getElementById('item-search-results').classList.add('hidden');
+  document.getElementById('item-search-results').innerHTML = '';
+
+  try {
+    const data = await get(`/api/lists/${listId}`);
+    renderListItems(data.items || []);
+  } catch (e) {
+    cont.innerHTML = `<div class="loading">שגיאה בטעינה: ${esc(e.message)}</div>`;
+  }
+}
+
+function updateProgress(checked, total) {
+  const pct = total ? Math.round((checked / total) * 100) : 0;
+  document.getElementById('list-progress-bar').style.width = `${pct}%`;
+  document.getElementById('list-progress-text').textContent = `${checked}/${total} פריטים`;
+}
+
+function renderListItems(items) {
+  const cont = document.getElementById('list-items-container');
+  const checked = items.filter(i => i.checked).length;
+  updateProgress(checked, items.length);
+
+  if (!items.length) {
+    cont.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📝</div>
+        <p>הרשימה ריקה</p>
+        <p class="text-muted">חפש מוצר או הוסף בשם למעלה</p>
+      </div>`;
+    return;
+  }
+
+  // Group by category
+  const groups = {};
+  items.forEach(item => {
+    const key = item.category_name_he || item.category_name || 'ללא קטגוריה';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+  });
+
+  cont.innerHTML = '';
+  Object.entries(groups).forEach(([catName, catItems]) => {
+    const group = document.createElement('div');
+    group.className = 'category-group';
+    group.innerHTML = `<div class="category-group-title">${esc(catName)}</div>`;
+
+    catItems.forEach(item => {
+      group.appendChild(buildItemRow(item));
+    });
+
+    cont.appendChild(group);
+  });
+}
+
+function buildItemRow(item) {
+  const row = document.createElement('div');
+  row.className = `list-item-row${item.checked ? ' checked' : ''}`;
+  row.dataset.itemId = item.id;
+
+  const displayName = item.product_name_he || item.product_name || item.custom_name || 'פריט';
+  const qtyLabel = `${item.quantity ?? 1} ${item.unit || ''}`.trim();
+
+  row.innerHTML = `
+    <div class="item-checkbox${item.checked ? ' checked' : ''}" role="checkbox"
+         aria-checked="${!!item.checked}" tabindex="0"></div>
+    <div class="item-body">
+      <div class="item-name">${esc(displayName)}</div>
+      <div class="item-qty">${esc(qtyLabel)}</div>
+    </div>
+    <button class="item-delete-btn" aria-label="מחק פריט">✕</button>`;
+
+  const checkbox = row.querySelector('.item-checkbox');
+  checkbox.addEventListener('click', () => toggleItemCheck(item, row, checkbox));
+  checkbox.addEventListener('keydown', e => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleItemCheck(item, row, checkbox); }
+  });
+
+  row.querySelector('.item-delete-btn').addEventListener('click', () => deleteItem(item, row));
+  return row;
+}
+
+async function toggleItemCheck(item, row, checkbox) {
+  const newChecked = !item.checked;
+  item.checked = newChecked;
+  row.classList.toggle('checked', newChecked);
+  checkbox.classList.toggle('checked', newChecked);
+  checkbox.setAttribute('aria-checked', newChecked);
+  try {
+    await put(`/api/lists/${state.currentListId}/items/${item.id}`, { checked: newChecked ? 1 : 0 });
+    // Recalculate progress
+    const allRows = document.querySelectorAll('.list-item-row');
+    const checkedCount = document.querySelectorAll('.list-item-row.checked').length;
+    updateProgress(checkedCount, allRows.length);
+  } catch (e) {
+    // Revert
+    item.checked = !newChecked;
+    row.classList.toggle('checked', item.checked);
+    checkbox.classList.toggle('checked', item.checked);
+    showToast('שגיאה בעדכון פריט', 'error');
+  }
+}
+
+async function deleteItem(item, row) {
+  try {
+    await del(`/api/lists/${state.currentListId}/items/${item.id}`);
+    row.remove();
+    const allRows = document.querySelectorAll('.list-item-row');
+    const checkedCount = document.querySelectorAll('.list-item-row.checked').length;
+    updateProgress(checkedCount, allRows.length);
+    showToast('הפריט הוסר', 'success');
+  } catch (e) {
+    showToast(`שגיאה: ${e.message}`, 'error');
+  }
+}
+
+// ─── Add Item (search) ───────────────────────────────
+let searchTimeout;
+document.getElementById('item-search-input').addEventListener('input', e => {
+  clearTimeout(searchTimeout);
+  const q = e.target.value.trim();
+  const dropdown = document.getElementById('item-search-results');
+  if (!q) { dropdown.classList.add('hidden'); dropdown.innerHTML = ''; return; }
+  searchTimeout = setTimeout(() => searchCatalogForItem(q), 300);
+});
+
+async function searchCatalogForItem(q) {
+  const dropdown = document.getElementById('item-search-results');
+  try {
+    const results = await get(`/api/catalog?search=${encodeURIComponent(q)}`);
+    dropdown.innerHTML = '';
+    if (!results.length) {
+      dropdown.classList.add('hidden');
+      return;
+    }
+    results.slice(0, 8).forEach(p => {
+      const item = document.createElement('div');
+      item.className = 'search-dropdown-item';
+      item.innerHTML = `<span class="item-icon">📦</span><span>${esc(productLabel(p))}</span>`;
+      item.addEventListener('click', () => {
+        dropdown.classList.add('hidden');
+        document.getElementById('item-search-input').value = '';
+        openAddItemModal(p);
+      });
+      dropdown.appendChild(item);
+    });
+    dropdown.classList.remove('hidden');
+  } catch { /* silently ignore */ }
+}
+
+function openAddItemModal(product) {
+  state.addItemPendingProduct = product;
+  document.getElementById('add-item-product-id').value  = product.id;
+  document.getElementById('add-item-product-name').textContent = productLabel(product);
+  document.getElementById('add-item-qty').value  = product.default_quantity ?? 1;
+  document.getElementById('add-item-unit').value = product.default_unit || 'יחידה';
+  openModal('modal-add-item');
+}
+
+document.getElementById('btn-confirm-add-item').addEventListener('click', async () => {
+  const productId = document.getElementById('add-item-product-id').value;
+  const qty  = parseFloat(document.getElementById('add-item-qty').value)  || 1;
+  const unit = document.getElementById('add-item-unit').value.trim() || 'יחידה';
+  try {
+    const newItem = await post(`/api/lists/${state.currentListId}/items`,
+      { product_id: parseInt(productId), quantity: qty, unit });
+    closeModal('modal-add-item');
+    showToast('הפריט נוסף', 'success');
+    loadListDetail(state.currentListId); // Reload to group properly
+  } catch (e) {
+    showToast(`שגיאה: ${e.message}`, 'error');
+  }
+});
+
+// ─── Add Custom Item ──────────────────────────────────
+document.getElementById('btn-add-custom-item').addEventListener('click', addCustomItem);
+document.getElementById('item-search-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const dropdown = document.getElementById('item-search-results');
+    const first = dropdown.querySelector('.search-dropdown-item');
+    if (first && !dropdown.classList.contains('hidden')) {
+      first.click();
+    } else {
+      addCustomItem();
+    }
+  }
+});
+
+async function addCustomItem() {
+  const input = document.getElementById('item-search-input');
+  const name  = input.value.trim();
+  if (!name) { showToast('נא להזין שם פריט', 'error'); return; }
+  try {
+    await post(`/api/lists/${state.currentListId}/items`, { custom_name: name, quantity: 1, unit: 'יחידה' });
+    input.value = '';
+    document.getElementById('item-search-results').classList.add('hidden');
+    showToast('הפריט נוסף', 'success');
+    loadListDetail(state.currentListId);
+  } catch (e) {
+    showToast(`שגיאה: ${e.message}`, 'error');
+  }
+}
+
+// ─── Complete List ────────────────────────────────────
+document.getElementById('btn-complete-list').addEventListener('click', () => {
+  showConfirm('לסיים ולשמור את הקנייה?', async () => {
+    try {
+      await post(`/api/lists/${state.currentListId}/complete`, {});
+      showToast('הקנייה הושלמה ונשמרה בהיסטוריה!', 'success');
+      navigate('lists');
+    } catch (e) {
+      showToast(`שגיאה: ${e.message}`, 'error');
+    }
+  });
+});
+
+// ─── Delete List ──────────────────────────────────────
+document.getElementById('btn-delete-list').addEventListener('click', () => {
+  showConfirm(`למחוק את הרשימה "${state.currentListName}"?`, async () => {
+    try {
+      await del(`/api/lists/${state.currentListId}`);
+      showToast('הרשימה נמחקה', 'success');
+      navigate('lists');
+    } catch (e) {
+      showToast(`שגיאה: ${e.message}`, 'error');
+    }
+  });
+});
+
+// ─── Back button ──────────────────────────────────────
+document.getElementById('btn-back').addEventListener('click', () => {
+  navigate('lists');
+});
+
+// ═══════════════════════════════════════════════════════
+//  CATALOG VIEW
+// ═══════════════════════════════════════════════════════
+async function loadCatalog() {
+  const cont = document.getElementById('catalog-container');
+  cont.innerHTML = '<div class="loading">טוען...</div>';
+
+  // Load category chips if not already loaded
+  await loadCategoryChips();
+
+  try {
+    const params = new URLSearchParams();
+    if (state.catalogFilter.search)     params.set('search', state.catalogFilter.search);
+    if (state.catalogFilter.categoryId) params.set('category_id', state.catalogFilter.categoryId);
+    const products = await get(`/api/catalog?${params}`);
+
+    if (!products.length) {
+      cont.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📦</div>
+          <p>אין מוצרים</p>
+          <p class="text-muted">לחץ + כדי להוסיף מוצר חדש</p>
+        </div>`;
+      return;
+    }
+    cont.innerHTML = '';
+    products.forEach(p => cont.appendChild(buildProductCard(p)));
+  } catch (e) {
+    cont.innerHTML = `<div class="loading">שגיאה בטעינה: ${esc(e.message)}</div>`;
+  }
+}
+
+async function loadCategoryChips() {
+  if (state.categories.length) return; // Already loaded
+  try {
+    state.categories = await get('/api/categories');
+  } catch { state.categories = []; }
+
+  const chipsEl = document.getElementById('category-chips');
+  chipsEl.innerHTML = '';
+  const all = document.createElement('button');
+  all.className = `chip${!state.catalogFilter.categoryId ? ' active' : ''}`;
+  all.textContent = 'הכל';
+  all.addEventListener('click', () => {
+    state.catalogFilter.categoryId = null;
+    updateChips(null);
+    loadCatalog();
+  });
+  chipsEl.appendChild(all);
+
+  state.categories.forEach(cat => {
+    const chip = document.createElement('button');
+    chip.className = `chip${state.catalogFilter.categoryId === cat.id ? ' active' : ''}`;
+    chip.textContent = cat.name_he || cat.name;
+    chip.dataset.catId = cat.id;
+    chip.addEventListener('click', () => {
+      state.catalogFilter.categoryId = cat.id;
+      updateChips(cat.id);
+      loadCatalog();
+    });
+    chipsEl.appendChild(chip);
+  });
+}
+
+function updateChips(activeCatId) {
+  document.querySelectorAll('#category-chips .chip').forEach(chip => {
+    const id = chip.dataset.catId ? parseInt(chip.dataset.catId) : null;
+    chip.classList.toggle('active', id === activeCatId);
+  });
+}
+
+function buildProductCard(p) {
+  const card = document.createElement('div');
+  card.className = 'product-card';
+  const imgSrc = p.image_path ? p.image_path : null;
+  card.innerHTML = `
+    <div class="product-card-img">
+      ${imgSrc ? `<img src="${esc(imgSrc)}" alt="${esc(productLabel(p))}" loading="lazy" />` : '📦'}
+    </div>
+    <div class="product-card-body">
+      <div class="product-card-name">${esc(productLabel(p))}</div>
+      <div class="product-card-sub">${esc(p.category_name_he || p.category_name || '')}</div>
+    </div>
+    <div class="product-card-actions">
+      <button class="btn-edit" data-id="${p.id}" aria-label="ערוך">✏️</button>
+      <button class="btn-del"  data-id="${p.id}" aria-label="מחק">🗑️</button>
+    </div>`;
+  card.querySelector('.btn-edit').addEventListener('click', () => openProductModal(p));
+  card.querySelector('.btn-del').addEventListener('click', () => {
+    showConfirm(`למחוק את "${productLabel(p)}"?`, async () => {
+      try {
+        await del(`/api/catalog/${p.id}`);
+        card.remove();
+        showToast('המוצר נמחק', 'success');
+      } catch (e) {
+        showToast(`שגיאה: ${e.message}`, 'error');
+      }
+    });
+  });
+  return card;
+}
+
+// ─── Catalog Search ───────────────────────────────────
+let catalogSearchTimer;
+document.getElementById('catalog-search').addEventListener('input', e => {
+  clearTimeout(catalogSearchTimer);
+  state.catalogFilter.search = e.target.value.trim();
+  catalogSearchTimer = setTimeout(loadCatalog, 350);
+});
+
+// ─── Product Modal ────────────────────────────────────
+document.getElementById('fab-new-product').addEventListener('click', () => openProductModal(null));
+
+async function openProductModal(product) {
+  // Ensure categories are loaded in the select
+  await ensureCategoriesLoaded();
+  const sel = document.getElementById('product-category');
+  sel.innerHTML = '<option value="">-- בחר קטגוריה --</option>';
+  state.categories.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat.id;
+    opt.textContent = cat.name_he || cat.name;
+    sel.appendChild(opt);
+  });
+
+  const isEdit = !!product;
+  document.getElementById('modal-product-title').textContent = isEdit ? 'עריכת מוצר' : 'מוצר חדש';
+  document.getElementById('product-edit-id').value   = isEdit ? product.id : '';
+  document.getElementById('product-name-he').value   = isEdit ? (product.name_he || '') : '';
+  document.getElementById('product-name-en').value   = isEdit ? (product.name || '') : '';
+  document.getElementById('product-qty').value        = isEdit ? (product.default_quantity ?? 1) : 1;
+  document.getElementById('product-unit').value       = isEdit ? (product.default_unit || 'יחידה') : 'יחידה';
+  document.getElementById('product-image').value      = '';
+  sel.value = isEdit ? (product.category_id || '') : '';
+
+  const preview = document.getElementById('product-image-preview');
+  if (isEdit && product.image_path) {
+    preview.style.backgroundImage = `url('${esc(product.image_path)}')`;
+    preview.style.backgroundSize = 'cover';
+    preview.classList.remove('hidden');
+  } else {
+    preview.classList.add('hidden');
+  }
+
+  openModal('modal-product');
+}
+
+async function ensureCategoriesLoaded() {
+  if (!state.categories.length) {
+    try { state.categories = await get('/api/categories'); } catch { state.categories = []; }
+  }
+}
+
+// Image preview
+document.getElementById('product-image').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const preview = document.getElementById('product-image-preview');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    preview.style.backgroundImage = `url('${ev.target.result}')`;
+    preview.style.backgroundSize = 'cover';
+    preview.classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById('btn-save-product').addEventListener('click', async () => {
+  const id       = document.getElementById('product-edit-id').value;
+  const nameHe   = document.getElementById('product-name-he').value.trim();
+  const nameEn   = document.getElementById('product-name-en').value.trim();
+  const catId    = document.getElementById('product-category').value;
+  const qty      = parseFloat(document.getElementById('product-qty').value) || 1;
+  const unit     = document.getElementById('product-unit').value.trim() || 'יחידה';
+  const imageFile = document.getElementById('product-image').files[0];
+
+  if (!nameHe && !nameEn) {
+    showToast('נא להזין שם מוצר', 'error');
+    return;
+  }
+
+  const body = {
+    name_he: nameHe || undefined,
+    name: nameEn || undefined,
+    category_id: catId ? parseInt(catId) : undefined,
+    default_quantity: qty,
+    default_unit: unit,
+  };
+
+  try {
+    let saved;
+    if (id) {
+      saved = await put(`/api/catalog/${id}`, body);
+    } else {
+      saved = await post('/api/catalog', body);
+    }
+
+    // Upload image if provided
+    if (imageFile) {
+      const fd = new FormData();
+      fd.append('image', imageFile);
+      await api('POST', `/api/catalog/${saved.id}/image`, fd);
+    }
+
+    closeModal('modal-product');
+    showToast(id ? 'המוצר עודכן' : 'המוצר נוסף', 'success');
+    state.categories = []; // Force chips reload
+    loadCatalog();
+  } catch (e) {
+    showToast(`שגיאה: ${e.message}`, 'error');
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  CATEGORIES VIEW
+// ═══════════════════════════════════════════════════════
+async function loadCategories() {
+  const cont = document.getElementById('categories-container');
+  cont.innerHTML = '<div class="loading">טוען...</div>';
+  try {
+    state.categories = await get('/api/categories');
+    renderCategories();
+  } catch (e) {
+    cont.innerHTML = `<div class="loading">שגיאה: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderCategories() {
+  const cont = document.getElementById('categories-container');
+  cont.innerHTML = '';
+  if (!state.categories.length) {
+    cont.innerHTML = '<div class="loading">אין קטגוריות</div>';
+    return;
+  }
+  state.categories.forEach(cat => cont.appendChild(buildCategoryRow(cat)));
+}
+
+function buildCategoryRow(cat) {
+  const row = document.createElement('div');
+  row.className = 'list-row';
+  row.dataset.id = cat.id;
+  row.innerHTML = `
+    <div class="list-row-name">${esc(cat.name_he || cat.name)}</div>
+    <div class="list-row-actions">
+      <button class="btn-edit" aria-label="ערוך">✏️</button>
+      <button class="btn-del"  aria-label="מחק">🗑️</button>
+    </div>`;
+
+  row.querySelector('.btn-edit').addEventListener('click', () => openEditCategoryModal(cat));
+  row.querySelector('.btn-del').addEventListener('click', () => {
+    showConfirm(`למחוק את הקטגוריה "${cat.name_he || cat.name}"?`, async () => {
+      try {
+        await del(`/api/categories/${cat.id}`);
+        state.categories = state.categories.filter(c => c.id !== cat.id);
+        renderCategories();
+        showToast('הקטגוריה נמחקה', 'success');
+      } catch (e) {
+        showToast(`שגיאה: ${e.message}`, 'error');
+      }
+    });
+  });
+  return row;
+}
+
+// ─── Add Category ─────────────────────────────────────
+document.getElementById('btn-add-category').addEventListener('click', addCategory);
+document.getElementById('new-category-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addCategory();
+});
+
+async function addCategory() {
+  const input = document.getElementById('new-category-input');
+  const name  = input.value.trim();
+  if (!name) { showToast('נא להזין שם קטגוריה', 'error'); return; }
+  try {
+    const cat = await post('/api/categories', { name_he: name, name });
+    state.categories.push(cat);
+    renderCategories();
+    input.value = '';
+    showToast('הקטגוריה נוספה', 'success');
+  } catch (e) {
+    showToast(`שגיאה: ${e.message}`, 'error');
+  }
+}
+
+// ─── Edit Category Modal ──────────────────────────────
+function openEditCategoryModal(cat) {
+  document.getElementById('edit-category-id').value   = cat.id;
+  document.getElementById('edit-category-name').value = cat.name_he || cat.name;
+  openModal('modal-edit-category');
+  setTimeout(() => document.getElementById('edit-category-name').focus(), 100);
+}
+
+document.getElementById('btn-save-category').addEventListener('click', async () => {
+  const id   = document.getElementById('edit-category-id').value;
+  const name = document.getElementById('edit-category-name').value.trim();
+  if (!name) { showToast('נא להזין שם קטגוריה', 'error'); return; }
+  try {
+    const updated = await put(`/api/categories/${id}`, { name_he: name, name });
+    state.categories = state.categories.map(c => c.id === parseInt(id) ? updated : c);
+    renderCategories();
+    closeModal('modal-edit-category');
+    showToast('הקטגוריה עודכנה', 'success');
+  } catch (e) {
+    showToast(`שגיאה: ${e.message}`, 'error');
+  }
+});
+
+document.getElementById('edit-category-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-save-category').click();
+});
+
+// ═══════════════════════════════════════════════════════
+//  HISTORY VIEW
+// ═══════════════════════════════════════════════════════
+async function loadHistory() {
+  const cont = document.getElementById('history-container');
+  cont.innerHTML = '<div class="loading">טוען...</div>';
+  try {
+    const records = await get('/api/history');
+    if (!records.length) {
+      cont.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <p>אין היסטוריית קניות</p>
+          <p class="text-muted">קניות שהושלמו יופיעו כאן</p>
+        </div>`;
+      return;
+    }
+    cont.innerHTML = '';
+    records.forEach(rec => cont.appendChild(buildHistoryCard(rec)));
+  } catch (e) {
+    cont.innerHTML = `<div class="loading">שגיאה: ${esc(e.message)}</div>`;
+  }
+}
+
+function buildHistoryCard(rec) {
+  const card = document.createElement('div');
+  card.className = 'history-card';
+  card.dataset.id = rec.id;
+  card.innerHTML = `
+    <div class="history-card-header">
+      <div>
+        <div class="history-card-title">${esc(rec.list_name)}</div>
+        <div class="history-card-meta">${fmtDate(rec.completed_at)} · ${rec.item_count} פריטים</div>
+      </div>
+      <span class="history-chevron">▼</span>
+    </div>
+    <div class="history-items-list">
+      <div class="loading" style="padding:16px 0">טוען פריטים...</div>
+    </div>`;
+
+  const header = card.querySelector('.history-card-header');
+  const itemsList = card.querySelector('.history-items-list');
+
+  header.addEventListener('click', async () => {
+    const isExpanded = card.classList.contains('expanded');
+    if (isExpanded) {
+      card.classList.remove('expanded');
+      return;
+    }
+    card.classList.add('expanded');
+    // Load items lazily
+    if (itemsList.dataset.loaded) return;
+    try {
+      const detail = await get(`/api/history/${rec.id}`);
+      itemsList.dataset.loaded = 'true';
+      itemsList.innerHTML = '';
+      if (detail.items && detail.items.length) {
+        detail.items.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'history-item-row';
+          row.innerHTML = `
+            <span>${esc(item.product_name || 'פריט')}</span>
+            <span class="text-muted">${item.quantity ?? 1} ${esc(item.unit || '')}</span>`;
+          itemsList.appendChild(row);
+        });
+      } else {
+        itemsList.innerHTML = '<p class="text-muted" style="padding:8px 0">אין פריטים</p>';
+      }
+      // Delete button
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn-del history-delete-btn';
+      delBtn.textContent = 'מחק מהיסטוריה';
+      delBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        showConfirm('למחוק רשומה זו מההיסטוריה?', async () => {
+          try {
+            await del(`/api/history/${rec.id}`);
+            card.remove();
+            showToast('הרשומה נמחקה', 'success');
+          } catch (er) {
+            showToast(`שגיאה: ${er.message}`, 'error');
+          }
+        });
+      });
+      itemsList.appendChild(delBtn);
+    } catch (e) {
+      itemsList.innerHTML = `<p class="text-muted">שגיאה: ${esc(e.message)}</p>`;
+    }
+  });
+
+  return card;
+}
+
+// ═══════════════════════════════════════════════════════
+//  CONFIRM MODAL
+// ═══════════════════════════════════════════════════════
+function showConfirm(message, onConfirm) {
+  document.getElementById('modal-confirm-message').textContent = message;
+  state.confirmCallback = onConfirm;
+  openModal('modal-confirm');
+}
+
+document.getElementById('btn-confirm-delete').addEventListener('click', async () => {
+  closeModal('modal-confirm');
+  if (state.confirmCallback) {
+    await state.confirmCallback();
+    state.confirmCallback = null;
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  GLOBAL EVENT WIRING
+// ═══════════════════════════════════════════════════════
+
+// Bottom nav tabs
+document.querySelectorAll('.bottom-nav .nav-item').forEach(btn => {
+  btn.addEventListener('click', () => navigate(btn.dataset.view));
+});
+
+// Modal close buttons
+document.querySelectorAll('.modal-close').forEach(btn => {
+  btn.addEventListener('click', () => closeModal(btn.dataset.modal));
+});
+
+// Close modal by clicking overlay backdrop
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.add('hidden');
+  });
+});
+
+// Close search dropdown on outside click
+document.addEventListener('click', e => {
+  const dropdown = document.getElementById('item-search-results');
+  const bar = document.getElementById('item-search-input');
+  if (!dropdown.contains(e.target) && e.target !== bar) {
+    dropdown.classList.add('hidden');
+  }
+});
+
+// ─── Utility: HTML escape ─────────────────────────────
+function esc(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ─── Boot ─────────────────────────────────────────────
+navigate('lists');

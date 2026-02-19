@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2e7d32" />
+  <title>עגלת המשפחה</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast" role="alert" aria-live="polite"></div>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <button id="btn-back" class="btn-icon hidden" aria-label="חזור">&#8594;</button>
+    <h1 id="header-title">עגלת המשפחה</h1>
+    <div style="width:40px"></div>
+  </header>
+
+  <!-- Main content area -->
+  <main id="main-content">
+
+    <!-- ===== VIEW: LISTS ===== -->
+    <section id="view-lists" class="view active">
+      <div id="lists-container" class="cards-grid">
+        <div class="loading">טוען...</div>
+      </div>
+      <button class="fab" id="fab-new-list" aria-label="רשימה חדשה">+</button>
+    </section>
+
+    <!-- ===== VIEW: LIST DETAIL ===== -->
+    <section id="view-list-detail" class="view">
+      <div class="list-detail-header">
+        <div class="progress-bar-wrap">
+          <div id="list-progress-bar" class="progress-bar"></div>
+        </div>
+        <span id="list-progress-text" class="progress-text">0/0 פריטים</span>
+      </div>
+
+      <div class="add-item-bar">
+        <input type="text" id="item-search-input" placeholder="חפש מוצר או הוסף בשם..." autocomplete="off" />
+        <button id="btn-add-custom-item" class="btn-primary btn-sm">הוסף</button>
+      </div>
+      <div id="item-search-results" class="search-dropdown hidden"></div>
+
+      <div id="list-items-container" class="list-items-container">
+        <div class="loading">טוען פריטים...</div>
+      </div>
+
+      <div class="list-detail-actions">
+        <button id="btn-complete-list" class="btn-success btn-large">✓ סיום קנייה</button>
+        <button id="btn-delete-list" class="btn-danger btn-large">מחק רשימה</button>
+      </div>
+    </section>
+
+    <!-- ===== VIEW: CATALOG ===== -->
+    <section id="view-catalog" class="view">
+      <div class="catalog-toolbar">
+        <input type="search" id="catalog-search" placeholder="חפש מוצר..." />
+        <div id="category-chips" class="category-chips"></div>
+      </div>
+      <div id="catalog-container" class="cards-grid">
+        <div class="loading">טוען...</div>
+      </div>
+      <button class="fab" id="fab-new-product" aria-label="מוצר חדש">+</button>
+    </section>
+
+    <!-- ===== VIEW: CATEGORIES ===== -->
+    <section id="view-categories" class="view">
+      <div class="add-category-bar">
+        <input type="text" id="new-category-input" placeholder="שם הקטגוריה החדשה..." />
+        <button id="btn-add-category" class="btn-primary">הוסף</button>
+      </div>
+      <div id="categories-container" class="list-rows">
+        <div class="loading">טוען...</div>
+      </div>
+    </section>
+
+    <!-- ===== VIEW: HISTORY ===== -->
+    <section id="view-history" class="view">
+      <div id="history-container" class="cards-grid">
+        <div class="loading">טוען...</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav" role="navigation" aria-label="ניווט ראשי">
+    <button class="nav-item active" data-view="lists">
+      <span class="nav-icon">🛒</span>
+      <span class="nav-label">רשימות</span>
+    </button>
+    <button class="nav-item" data-view="catalog">
+      <span class="nav-icon">📦</span>
+      <span class="nav-label">קטלוג</span>
+    </button>
+    <button class="nav-item" data-view="categories">
+      <span class="nav-icon">🏷️</span>
+      <span class="nav-label">קטגוריות</span>
+    </button>
+    <button class="nav-item" data-view="history">
+      <span class="nav-icon">📋</span>
+      <span class="nav-label">היסטוריה</span>
+    </button>
+  </nav>
+
+  <!-- ===== MODAL: New List ===== -->
+  <div id="modal-new-list" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-new-list-title">
+    <div class="modal-box">
+      <h2 id="modal-new-list-title" class="modal-title">רשימה חדשה</h2>
+      <input type="text" id="new-list-name" class="modal-input" placeholder="שם הרשימה..." />
+      <div class="modal-actions">
+        <button id="btn-create-list" class="btn-primary">צור רשימה</button>
+        <button class="btn-cancel modal-close" data-modal="modal-new-list">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: New / Edit Product ===== -->
+  <div id="modal-product" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-product-title">
+    <div class="modal-box modal-box-scroll">
+      <h2 id="modal-product-title" class="modal-title">מוצר חדש</h2>
+      <input type="hidden" id="product-edit-id" value="" />
+
+      <label class="form-label">שם המוצר (עברית)</label>
+      <input type="text" id="product-name-he" class="modal-input" placeholder="לדוג׳: חלב 3%" />
+
+      <label class="form-label">שם המוצר (אנגלית – אופציונלי)</label>
+      <input type="text" id="product-name-en" class="modal-input" placeholder="e.g. Milk 3%" />
+
+      <label class="form-label">קטגוריה</label>
+      <select id="product-category" class="modal-input">
+        <option value="">-- בחר קטגוריה --</option>
+      </select>
+
+      <div class="form-row">
+        <div class="form-col">
+          <label class="form-label">כמות ברירת מחדל</label>
+          <input type="number" id="product-qty" class="modal-input" value="1" min="0.1" step="0.1" />
+        </div>
+        <div class="form-col">
+          <label class="form-label">יחידה</label>
+          <input type="text" id="product-unit" class="modal-input" placeholder="יחידה" />
+        </div>
+      </div>
+
+      <label class="form-label">תמונה</label>
+      <input type="file" id="product-image" class="modal-input" accept="image/*" />
+      <div id="product-image-preview" class="image-preview hidden"></div>
+
+      <div class="modal-actions">
+        <button id="btn-save-product" class="btn-primary">שמור</button>
+        <button class="btn-cancel modal-close" data-modal="modal-product">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Edit Category ===== -->
+  <div id="modal-edit-category" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-edit-cat-title">
+    <div class="modal-box">
+      <h2 id="modal-edit-cat-title" class="modal-title">עריכת קטגוריה</h2>
+      <input type="hidden" id="edit-category-id" />
+      <label class="form-label">שם הקטגוריה</label>
+      <input type="text" id="edit-category-name" class="modal-input" placeholder="שם הקטגוריה..." />
+      <div class="modal-actions">
+        <button id="btn-save-category" class="btn-primary">שמור</button>
+        <button class="btn-cancel modal-close" data-modal="modal-edit-category">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Add Item qty/unit confirm ===== -->
+  <div id="modal-add-item" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-add-item-title">
+    <div class="modal-box">
+      <h2 id="modal-add-item-title" class="modal-title">הוסף פריט</h2>
+      <input type="hidden" id="add-item-product-id" />
+      <p id="add-item-product-name" class="product-name-display"></p>
+      <div class="form-row">
+        <div class="form-col">
+          <label class="form-label">כמות</label>
+          <input type="number" id="add-item-qty" class="modal-input" value="1" min="0.1" step="0.1" />
+        </div>
+        <div class="form-col">
+          <label class="form-label">יחידה</label>
+          <input type="text" id="add-item-unit" class="modal-input" placeholder="יחידה" />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-confirm-add-item" class="btn-primary">הוסף לרשימה</button>
+        <button class="btn-cancel modal-close" data-modal="modal-add-item">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Confirm Delete ===== -->
+  <div id="modal-confirm" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-confirm-title">
+    <div class="modal-box">
+      <h2 id="modal-confirm-title" class="modal-title">אישור מחיקה</h2>
+      <p id="modal-confirm-message">האם אתה בטוח שברצונך למחוק?</p>
+      <div class="modal-actions">
+        <button id="btn-confirm-delete" class="btn-danger">מחק</button>
+        <button class="btn-cancel modal-close" data-modal="modal-confirm">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
