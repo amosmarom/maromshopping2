@@ -651,6 +651,7 @@ async function openProductModal(product, prefillName = '') {
   document.getElementById('product-qty').value        = isEdit ? (product.default_quantity ?? 1) : 1;
   document.getElementById('product-unit').value       = isEdit ? (product.default_unit || 'יחידה') : 'יחידה';
   document.getElementById('product-image').value      = '';
+  pastedImageFile = null;
   sel.value = isEdit ? (product.category_id || '') : '';
 
   const preview = document.getElementById('product-image-preview');
@@ -671,10 +672,27 @@ async function ensureCategoriesLoaded() {
   }
 }
 
-// Image preview
-document.getElementById('product-image').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file) return;
+// ─── Clipboard paste image ────────────────────────────
+let pastedImageFile = null;
+
+document.addEventListener('paste', e => {
+  if (document.getElementById('modal-product').classList.contains('hidden')) return;
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (!file) continue;
+      pastedImageFile = file;
+      showImagePreview(file);
+      showToast('תמונה הודבקה מהלוח', 'success');
+      e.preventDefault();
+      break;
+    }
+  }
+});
+
+function showImagePreview(file) {
   const preview = document.getElementById('product-image-preview');
   const reader = new FileReader();
   reader.onload = ev => {
@@ -683,6 +701,14 @@ document.getElementById('product-image').addEventListener('change', e => {
     preview.classList.remove('hidden');
   };
   reader.readAsDataURL(file);
+}
+
+// Image preview
+document.getElementById('product-image').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  pastedImageFile = null; // file input takes priority
+  showImagePreview(file);
 });
 
 document.getElementById('btn-save-product').addEventListener('click', async () => {
@@ -692,7 +718,7 @@ document.getElementById('btn-save-product').addEventListener('click', async () =
   const catId    = document.getElementById('product-category').value;
   const qty      = parseFloat(document.getElementById('product-qty').value) || 1;
   const unit     = document.getElementById('product-unit').value.trim() || 'יחידה';
-  const imageFile = document.getElementById('product-image').files[0];
+  const imageFile = pastedImageFile || document.getElementById('product-image').files[0];
 
   if (!nameHe && !nameEn) {
     showToast('נא להזין שם מוצר', 'error');
@@ -721,6 +747,7 @@ document.getElementById('btn-save-product').addEventListener('click', async () =
       fd.append('image', imageFile);
       await api('POST', `/api/catalog/${saved.id}/image`, fd);
     }
+    pastedImageFile = null;
 
     closeModal('modal-product');
 
@@ -974,7 +1001,7 @@ document.getElementById('mode-tab-shop').addEventListener('click',  () => setLis
 // Modal close buttons
 document.querySelectorAll('.modal-close').forEach(btn => {
   btn.addEventListener('click', () => {
-    if (btn.dataset.modal === 'modal-product') state.addToListAfterSave = false;
+    if (btn.dataset.modal === 'modal-product') { state.addToListAfterSave = false; pastedImageFile = null; }
     closeModal(btn.dataset.modal);
   });
 });

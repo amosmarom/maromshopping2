@@ -853,6 +853,15 @@ input, select, textarea { font-family: inherit; }
   gap: 4px;
 }
 
+.paste-hint {
+  display: block;
+  font-size: 0.78rem;
+  color: #888;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
 .image-preview {
   width: 80px;
   height: 80px;
