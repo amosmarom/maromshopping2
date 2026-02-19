@@ -346,7 +346,11 @@ function buildItemRowBuild(item) {
   row.dataset.itemId = item.id;
   const displayName = item.product_name_he || item.product_name || item.custom_name || 'פריט';
   const qtyLabel = `${item.quantity ?? 1} ${item.unit || ''}`.trim();
+  const imgHtml = item.image_path
+    ? `<img src="${esc(item.image_path)}" class="item-thumb" alt="" loading="lazy" />`
+    : `<span class="item-thumb-placeholder">📦</span>`;
   row.innerHTML = `
+    ${imgHtml}
     <div class="item-body">
       <div class="item-name">${esc(displayName)}</div>
       <div class="item-qty">${esc(qtyLabel)}</div>
@@ -364,8 +368,12 @@ function buildItemRowShop(item) {
   row.dataset.itemId = item.id;
   const displayName = item.product_name_he || item.product_name || item.custom_name || 'פריט';
   const qtyLabel = `${item.quantity ?? 1} ${item.unit || ''}`.trim();
+  const imgHtml = item.image_path
+    ? `<img src="${esc(item.image_path)}" class="item-thumb" alt="" loading="lazy" />`
+    : `<span class="item-thumb-placeholder">📦</span>`;
   row.innerHTML = `
     <button class="item-btn-found${item.checked === 1 ? ' active' : ''}" aria-label="נמצא">✓</button>
+    ${imgHtml}
     <div class="item-body">
       <div class="item-name">${esc(displayName)}</div>
       <div class="item-qty">${esc(qtyLabel)}</div>
