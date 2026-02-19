@@ -5,6 +5,8 @@
 
 'use strict';
 
+const APP_VERSION = '19/02/26 16:00';
+
 // ─── State ────────────────────────────────────────────
 const state = {
   currentView: 'lists',
@@ -659,6 +661,7 @@ async function openProductModal(product, prefillName = '') {
   document.getElementById('product-qty').value        = isEdit ? (product.default_quantity ?? 1) : 1;
   document.getElementById('product-unit').value       = isEdit ? (product.default_unit || 'יחידה') : 'יחידה';
   document.getElementById('product-image').value      = '';
+  document.getElementById('product-camera').value     = '';
   pastedImageFile = null;
   sel.value = isEdit ? (product.category_id || '') : '';
 
@@ -715,7 +718,18 @@ function showImagePreview(file) {
 document.getElementById('product-image').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
-  pastedImageFile = null; // file input takes priority
+  pastedImageFile = null;
+  showImagePreview(file);
+});
+
+// Camera button — opens camera directly on iPhone
+document.getElementById('btn-camera').addEventListener('click', () => {
+  document.getElementById('product-camera').click();
+});
+document.getElementById('product-camera').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  pastedImageFile = null;
   showImagePreview(file);
 });
 
@@ -726,7 +740,9 @@ document.getElementById('btn-save-product').addEventListener('click', async () =
   const catId    = document.getElementById('product-category').value;
   const qty      = parseFloat(document.getElementById('product-qty').value) || 1;
   const unit     = document.getElementById('product-unit').value.trim() || 'יחידה';
-  const imageFile = pastedImageFile || document.getElementById('product-image').files[0];
+  const imageFile = pastedImageFile ||
+    document.getElementById('product-image').files[0] ||
+    document.getElementById('product-camera').files[0];
 
   if (!nameHe && !nameEn) {
     showToast('נא להזין שם מוצר', 'error');
@@ -1042,4 +1058,5 @@ function esc(str) {
 }
 
 // ─── Boot ─────────────────────────────────────────────
+document.getElementById('app-version').textContent = APP_VERSION;
 navigate('lists');
