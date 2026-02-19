@@ -14,6 +14,7 @@ const state = {
   catalogFilter: { search: '', categoryId: null },
   confirmCallback: null,
   addItemPendingProduct: null, // { id, name_he, name, default_unit, default_quantity }
+  addToListAfterSave: false,   // true when product modal opened from list search
 };
 
 // ─── API helpers ──────────────────────────────────────
@@ -367,15 +368,11 @@ async function addCustomItem() {
   const input = document.getElementById('item-search-input');
   const name  = input.value.trim();
   if (!name) { showToast('נא להזין שם פריט', 'error'); return; }
-  try {
-    await post(`/api/lists/${state.currentListId}/items`, { custom_name: name, quantity: 1, unit: 'יחידה' });
-    input.value = '';
-    document.getElementById('item-search-results').classList.add('hidden');
-    showToast('הפריט נוסף', 'success');
-    loadListDetail(state.currentListId);
-  } catch (e) {
-    showToast(`שגיאה: ${e.message}`, 'error');
-  }
+  // Close dropdown, open product modal pre-filled so item is saved to catalog too
+  input.value = '';
+  document.getElementById('item-search-results').classList.add('hidden');
+  state.addToListAfterSave = true;
+  await openProductModal(null, name);
 }
 
 // ─── Complete List ────────────────────────────────────
@@ -520,9 +517,12 @@ document.getElementById('catalog-search').addEventListener('input', e => {
 });
 
 // ─── Product Modal ────────────────────────────────────
-document.getElementById('fab-new-product').addEventListener('click', () => openProductModal(null));
+document.getElementById('fab-new-product').addEventListener('click', () => {
+  state.addToListAfterSave = false;
+  openProductModal(null);
+});
 
-async function openProductModal(product) {
+async function openProductModal(product, prefillName = '') {
   // Ensure categories are loaded in the select
   await ensureCategoriesLoaded();
   const sel = document.getElementById('product-category');
@@ -535,9 +535,11 @@ async function openProductModal(product) {
   });
 
   const isEdit = !!product;
-  document.getElementById('modal-product-title').textContent = isEdit ? 'עריכת מוצר' : 'מוצר חדש';
+  let title = isEdit ? 'עריכת מוצר' : 'מוצר חדש';
+  if (!isEdit && state.addToListAfterSave) title = 'הוסף מוצר חדש לקטלוג ולרשימה';
+  document.getElementById('modal-product-title').textContent = title;
   document.getElementById('product-edit-id').value   = isEdit ? product.id : '';
-  document.getElementById('product-name-he').value   = isEdit ? (product.name_he || '') : '';
+  document.getElementById('product-name-he').value   = isEdit ? (product.name_he || '') : prefillName;
   document.getElementById('product-name-en').value   = isEdit ? (product.name || '') : '';
   document.getElementById('product-qty').value        = isEdit ? (product.default_quantity ?? 1) : 1;
   document.getElementById('product-unit').value       = isEdit ? (product.default_unit || 'יחידה') : 'יחידה';
@@ -614,9 +616,23 @@ document.getElementById('btn-save-product').addEventListener('click', async () =
     }
 
     closeModal('modal-product');
-    showToast(id ? 'המוצר עודכן' : 'המוצר נוסף', 'success');
-    state.categories = []; // Force chips reload
-    loadCatalog();
+
+    // If opened from list search — add the new product to the current list
+    if (state.addToListAfterSave && state.currentListId) {
+      state.addToListAfterSave = false;
+      await post(`/api/lists/${state.currentListId}/items`, {
+        product_id: saved.id,
+        quantity: qty,
+        unit,
+      });
+      showToast('המוצר נוסף לקטלוג ולרשימה', 'success');
+      loadListDetail(state.currentListId);
+    } else {
+      state.addToListAfterSave = false;
+      showToast(id ? 'המוצר עודכן' : 'המוצר נוסף לקטלוג', 'success');
+      state.categories = []; // Force chips reload
+      loadCatalog();
+    }
   } catch (e) {
     showToast(`שגיאה: ${e.message}`, 'error');
   }
@@ -842,7 +858,10 @@ document.querySelectorAll('.bottom-nav .nav-item').forEach(btn => {
 
 // Modal close buttons
 document.querySelectorAll('.modal-close').forEach(btn => {
-  btn.addEventListener('click', () => closeModal(btn.dataset.modal));
+  btn.addEventListener('click', () => {
+    if (btn.dataset.modal === 'modal-product') state.addToListAfterSave = false;
+    closeModal(btn.dataset.modal);
+  });
 });
 
 // Close modal by clicking overlay backdrop
