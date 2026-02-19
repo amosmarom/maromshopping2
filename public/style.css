@@ -978,36 +978,44 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ---------- Shop action buttons ---------- */
-.item-btn-found,
-.item-btn-notfound {
-  flex-shrink: 0;
-  border: 1.5px solid;
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-weight: 700;
-  transition: background 0.12s, color 0.12s;
-  -webkit-tap-highlight-color: transparent;
-}
-
+/* Checkbox (found) */
 .item-btn-found {
-  font-size: 1rem;
-  border-color: #a5d6a7;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border: 2px solid #bbb;
+  border-radius: 6px;
   background: #fff;
-  color: #388e3c;
-  min-width: 38px;
+  color: transparent;   /* hide ✓ when unchecked */
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .item-btn-found.active {
   background: #2e7d32;
-  color: #fff;
   border-color: #2e7d32;
+  color: #fff;           /* show ✓ when checked */
 }
 
+/* Not-found button */
 .item-btn-notfound {
+  flex-shrink: 0;
+  border: 1.5px solid #ffcdd2;
+  border-radius: 8px;
+  padding: 5px 9px;
   font-size: 0.72rem;
-  border-color: #ffcdd2;
+  font-weight: 700;
   background: #fff;
   color: #c62828;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .item-btn-notfound.active {
