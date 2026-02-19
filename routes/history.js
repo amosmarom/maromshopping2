@@ -8,6 +8,17 @@ router.get('/', (req, res) => {
   res.json(history);
 });
 
+// GET /api/history/items - All items across all history records
+router.get('/items', (req, res) => {
+  const items = db.prepare(`
+    SELECT phi.*, ph.list_name, ph.completed_at
+    FROM purchase_history_items phi
+    JOIN purchase_history ph ON phi.history_id = ph.id
+    ORDER BY phi.product_name, ph.completed_at DESC
+  `).all();
+  res.json(items);
+});
+
 // GET /api/history/:id - Get history detail with items
 router.get('/:id', (req, res) => {
   const record = db.prepare('SELECT * FROM purchase_history WHERE id = ?').get(req.params.id);

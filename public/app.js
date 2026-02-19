@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '19/02/26 16:00';
+const APP_VERSION = '19/02/26 17:30';
 
 // ─── State ────────────────────────────────────────────
 const state = {
@@ -136,12 +136,27 @@ async function loadLists() {
       const card = document.createElement('div');
       card.className = 'list-card';
       card.innerHTML = `
-        <div class="list-card-title">${esc(list.name)}</div>
-        <div class="list-card-meta">
-          <span class="list-card-badge">${checked}/${total} פריטים</span>
-          <span>${fmtDate(list.created_at)}</span>
-        </div>`;
-      card.addEventListener('click', () => openListDetail(list.id, list.name));
+        <div class="list-card-main">
+          <div class="list-card-title">${esc(list.name)}</div>
+          <div class="list-card-meta">
+            <span class="list-card-badge">${checked}/${total} פריטים</span>
+            <span>${fmtDate(list.created_at)}</span>
+          </div>
+        </div>
+        <button class="btn-archive-list" aria-label="ארכב">🗄</button>`;
+      card.querySelector('.list-card-main').addEventListener('click', () => openListDetail(list.id, list.name));
+      card.querySelector('.btn-archive-list').addEventListener('click', e => {
+        e.stopPropagation();
+        showConfirm(`לארכב את "${esc(list.name)}"?`, async () => {
+          try {
+            await post(`/api/lists/${list.id}/complete`, {});
+            card.remove();
+            showToast('הרשימה עברה לארכיון', 'success');
+          } catch (err) {
+            showToast(`שגיאה: ${err.message}`, 'error');
+          }
+        }, { title: 'אישור ארכוב', confirmLabel: 'ארכב', confirmClass: 'btn-success' });
+      });
       cont.appendChild(card);
     });
   } catch (e) {
@@ -987,6 +1002,67 @@ function buildHistoryCard(rec) {
 
   return card;
 }
+
+// ─── History by item ──────────────────────────────────
+async function loadHistoryByItem() {
+  const cont = document.getElementById('history-container');
+  cont.innerHTML = '<div class="loading">טוען...</div>';
+  try {
+    const items = await get('/api/history/items');
+    if (!items.length) {
+      cont.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📦</div>
+          <p>אין פריטים בהיסטוריה</p>
+        </div>`;
+      return;
+    }
+    // Group by product name
+    const groups = {};
+    items.forEach(item => {
+      const key = item.product_name || 'לא ידוע';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    });
+    cont.innerHTML = '';
+    Object.entries(groups).sort(([a],[b]) => a.localeCompare(b, 'he')).forEach(([name, entries]) => {
+      const card = document.createElement('div');
+      card.className = 'history-card';
+      card.innerHTML = `
+        <div class="history-card-header">
+          <div>
+            <div class="history-card-title">${esc(name)}</div>
+            <div class="history-card-meta">${entries.length} פעמים</div>
+          </div>
+          <span class="history-chevron">▼</span>
+        </div>
+        <div class="history-items-list">
+          ${entries.map(e => `
+            <div class="history-item-row">
+              <span>${esc(e.list_name)}</span>
+              <span class="text-muted">${fmtDate(e.completed_at)} · ${e.quantity ?? 1} ${esc(e.unit || '')}</span>
+            </div>`).join('')}
+        </div>`;
+      card.querySelector('.history-card-header').addEventListener('click', () => {
+        card.classList.toggle('expanded');
+      });
+      cont.appendChild(card);
+    });
+  } catch (e) {
+    cont.innerHTML = `<div class="loading">שגיאה: ${esc(e.message)}</div>`;
+  }
+}
+
+document.getElementById('history-tab-lists').addEventListener('click', () => {
+  document.getElementById('history-tab-lists').classList.add('active');
+  document.getElementById('history-tab-items').classList.remove('active');
+  loadHistory();
+});
+document.getElementById('history-tab-items').addEventListener('click', () => {
+  document.getElementById('history-tab-items').classList.add('active');
+  document.getElementById('history-tab-lists').classList.remove('active');
+  loadHistoryByItem();
+});
 
 // ═══════════════════════════════════════════════════════
 //  CONFIRM MODAL

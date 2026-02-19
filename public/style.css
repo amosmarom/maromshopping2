@@ -152,6 +152,9 @@ input, select, textarea { font-family: inherit; }
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  gap: 10px;
   cursor: pointer;
   transition: transform 0.1s, box-shadow 0.1s;
   -webkit-tap-highlight-color: transparent;
@@ -160,6 +163,25 @@ input, select, textarea { font-family: inherit; }
 .list-card:active {
   transform: scale(0.98);
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.list-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-archive-list {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  padding: 4px 6px;
+  border-radius: 8px;
+  color: #2e7d32;
+  flex-shrink: 0;
+}
+
+.btn-archive-list:active {
+  background: #e8f5e9;
 }
 
 .list-card-title {
