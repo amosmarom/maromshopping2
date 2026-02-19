@@ -8,7 +8,7 @@ const db = require('../database/db');
 // Configure multer for image uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '..', 'public', 'images');
+    const dir = path.join(__dirname, '..', 'data', 'images');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
@@ -110,7 +110,7 @@ router.delete('/:id', (req, res) => {
 
   // Delete image file if exists
   if (product.image_path) {
-    const imgPath = path.join(__dirname, '..', 'public', product.image_path);
+    const imgPath = path.join(__dirname, '..', 'data', 'images', path.basename(product.image_path));
     if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
   }
 
@@ -130,7 +130,7 @@ router.post('/:id/image', upload.single('image'), (req, res) => {
 
   // Delete old image if exists
   if (product.image_path) {
-    const oldPath = path.join(__dirname, '..', 'public', product.image_path);
+    const oldPath = path.join(__dirname, '..', 'data', 'images', path.basename(product.image_path));
     if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
   }
 
