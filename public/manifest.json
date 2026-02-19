@@ -1,17 +1,16 @@
 {
-  "name": "עגלת המשפחה - Family Cart",
-  "short_name": "Family Cart",
-  "description": "Family Shopping & Catalog Manager",
+  "name": "עגלת המשפחה",
+  "short_name": "עגלת המשפחה",
+  "description": "רשימות קניות משפחתיות",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f9fafb",
-  "theme_color": "#2563eb",
-  "orientation": "any",
+  "background_color": "#2e7d32",
+  "theme_color": "#2e7d32",
+  "orientation": "portrait",
+  "lang": "he",
+  "dir": "rtl",
   "icons": [
-    {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>",
-      "sizes": "any",
-      "type": "image/svg+xml"
-    }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }
