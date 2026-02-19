@@ -277,9 +277,7 @@ function setListMode(mode) {
   document.getElementById('mode-tab-shop').classList.toggle('active', mode === 'shop');
   document.querySelector('.add-item-bar').classList.toggle('hidden', mode === 'shop');
   document.getElementById('item-search-results').classList.add('hidden');
-  // In shop mode: only archive button. In build mode: only delete button.
   document.getElementById('btn-complete-list').classList.toggle('hidden', mode === 'build');
-  document.getElementById('btn-delete-list').classList.toggle('hidden', mode === 'shop');
   document.getElementById('list-progress-wrap').classList.toggle('hidden', mode === 'build');
   renderListItems(state.currentListItems);
 }
@@ -507,20 +505,7 @@ document.getElementById('btn-complete-list').addEventListener('click', () => {
     } catch (e) {
       showToast(`שגיאה: ${e.message}`, 'error');
     }
-  });
-});
-
-// ─── Delete List ──────────────────────────────────────
-document.getElementById('btn-delete-list').addEventListener('click', () => {
-  showConfirm(`למחוק את הרשימה "${state.currentListName}"?`, async () => {
-    try {
-      await del(`/api/lists/${state.currentListId}`);
-      showToast('הרשימה נמחקה', 'success');
-      navigate('lists');
-    } catch (e) {
-      showToast(`שגיאה: ${e.message}`, 'error');
-    }
-  });
+  }, { title: 'אישור ארכוב', confirmLabel: 'ארכב', confirmClass: 'btn-success' });
 });
 
 // ─── Back button ──────────────────────────────────────
@@ -955,8 +940,12 @@ function buildHistoryCard(rec) {
 // ═══════════════════════════════════════════════════════
 //  CONFIRM MODAL
 // ═══════════════════════════════════════════════════════
-function showConfirm(message, onConfirm) {
+function showConfirm(message, onConfirm, opts = {}) {
+  document.getElementById('modal-confirm-title').textContent   = opts.title   || 'אישור מחיקה';
   document.getElementById('modal-confirm-message').textContent = message;
+  const btn = document.getElementById('btn-confirm-delete');
+  btn.textContent = opts.confirmLabel || 'מחק';
+  btn.className   = opts.confirmClass || 'btn-danger';
   state.confirmCallback = onConfirm;
   openModal('modal-confirm');
 }
