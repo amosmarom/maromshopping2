@@ -15,6 +15,8 @@ const state = {
   confirmCallback: null,
   addItemPendingProduct: null, // { id, name_he, name, default_unit, default_quantity }
   addToListAfterSave: false,   // true when product modal opened from list search
+  listMode: 'build',           // 'build' | 'shop'
+  currentListItems: [],        // cached items — avoids re-fetch on mode switch
 };
 
 // ─── API helpers ──────────────────────────────────────
@@ -175,36 +177,71 @@ document.getElementById('new-list-name').addEventListener('keydown', e => {
 async function loadListDetail(listId) {
   const cont = document.getElementById('list-items-container');
   cont.innerHTML = '<div class="loading">טוען פריטים...</div>';
-  updateProgress(0, 0);
+
+  // Always reset to build mode when opening a list
+  state.listMode = 'build';
+  state.currentListItems = [];
+  document.getElementById('mode-tab-build').classList.add('active');
+  document.getElementById('mode-tab-shop').classList.remove('active');
+  document.querySelector('.add-item-bar').classList.remove('hidden');
+  document.getElementById('btn-complete-list').classList.add('hidden');
+  document.getElementById('list-progress-wrap').classList.add('hidden');
+  document.getElementById('list-progress-text').textContent = '';
   document.getElementById('item-search-input').value = '';
   document.getElementById('item-search-results').classList.add('hidden');
   document.getElementById('item-search-results').innerHTML = '';
 
   try {
     const data = await get(`/api/lists/${listId}`);
-    renderListItems(data.items || []);
+    state.currentListItems = data.items || [];
+    renderListItems(state.currentListItems);
   } catch (e) {
     cont.innerHTML = `<div class="loading">שגיאה בטעינה: ${esc(e.message)}</div>`;
   }
 }
 
-function updateProgress(checked, total) {
-  const pct = total ? Math.round((checked / total) * 100) : 0;
+function setListMode(mode) {
+  state.listMode = mode;
+  document.getElementById('mode-tab-build').classList.toggle('active', mode === 'build');
+  document.getElementById('mode-tab-shop').classList.toggle('active', mode === 'shop');
+  document.querySelector('.add-item-bar').classList.toggle('hidden', mode === 'shop');
+  document.getElementById('item-search-results').classList.add('hidden');
+  document.getElementById('btn-complete-list').classList.toggle('hidden', mode === 'build');
+  document.getElementById('list-progress-wrap').classList.toggle('hidden', mode === 'build');
+  renderListItems(state.currentListItems);
+}
+
+function updateProgress(items) {
+  const text = document.getElementById('list-progress-text');
+  if (state.listMode === 'build') {
+    text.textContent = `${items.length} פריטים`;
+    return;
+  }
+  // Shop mode
+  const found   = items.filter(i => i.checked === 1).length;
+  const missing = items.filter(i => i.checked === 2).length;
+  const pending = items.length - found - missing;
+  const pct     = items.length ? Math.round((found / items.length) * 100) : 0;
   document.getElementById('list-progress-bar').style.width = `${pct}%`;
-  document.getElementById('list-progress-text').textContent = `${checked}/${total} פריטים`;
+  text.innerHTML =
+    `<span class="progress-found">✓ ${found}</span>&ensp;` +
+    `<span class="progress-missing">✗ ${missing}</span>&ensp;` +
+    `<span class="progress-pending">◯ ${pending} נותרו</span>`;
 }
 
 function renderListItems(items) {
   const cont = document.getElementById('list-items-container');
-  const checked = items.filter(i => i.checked).length;
-  updateProgress(checked, items.length);
+  updateProgress(items);
 
   if (!items.length) {
+    const hint = state.listMode === 'build'
+      ? '<p class="text-muted">חפש מוצר או הוסף בשם למעלה</p>'
+      : '<p class="text-muted">אין פריטים ברשימה</p>';
     cont.innerHTML = `
       <div class="empty-state">
         <div class="empty-state-icon">📝</div>
         <p>הרשימה ריקה</p>
-        <p class="text-muted">חפש מוצר או הוסף בשם למעלה</p>
+        ${hint}
       </div>`;
     return;
   }
@@ -222,59 +259,72 @@ function renderListItems(items) {
     const group = document.createElement('div');
     group.className = 'category-group';
     group.innerHTML = `<div class="category-group-title">${esc(catName)}</div>`;
-
     catItems.forEach(item => {
-      group.appendChild(buildItemRow(item));
+      group.appendChild(state.listMode === 'shop'
+        ? buildItemRowShop(item)
+        : buildItemRowBuild(item));
     });
-
     cont.appendChild(group);
   });
 }
 
-function buildItemRow(item) {
+// ─── Build mode row: name + qty + delete ─────────────
+function buildItemRowBuild(item) {
   const row = document.createElement('div');
-  row.className = `list-item-row${item.checked ? ' checked' : ''}`;
+  row.className = 'list-item-row';
   row.dataset.itemId = item.id;
-
   const displayName = item.product_name_he || item.product_name || item.custom_name || 'פריט';
   const qtyLabel = `${item.quantity ?? 1} ${item.unit || ''}`.trim();
-
   row.innerHTML = `
-    <div class="item-checkbox${item.checked ? ' checked' : ''}" role="checkbox"
-         aria-checked="${!!item.checked}" tabindex="0"></div>
     <div class="item-body">
       <div class="item-name">${esc(displayName)}</div>
       <div class="item-qty">${esc(qtyLabel)}</div>
     </div>
     <button class="item-delete-btn" aria-label="מחק פריט">✕</button>`;
-
-  const checkbox = row.querySelector('.item-checkbox');
-  checkbox.addEventListener('click', () => toggleItemCheck(item, row, checkbox));
-  checkbox.addEventListener('keydown', e => {
-    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleItemCheck(item, row, checkbox); }
-  });
-
   row.querySelector('.item-delete-btn').addEventListener('click', () => deleteItem(item, row));
   return row;
 }
 
-async function toggleItemCheck(item, row, checkbox) {
-  const newChecked = !item.checked;
+// ─── Shop mode row: ✓ found | name + qty | ✗ not found ─
+function buildItemRowShop(item) {
+  const stateClass = item.checked === 1 ? 'item-found' : item.checked === 2 ? 'item-not-found' : '';
+  const row = document.createElement('div');
+  row.className = `list-item-row${stateClass ? ' ' + stateClass : ''}`;
+  row.dataset.itemId = item.id;
+  const displayName = item.product_name_he || item.product_name || item.custom_name || 'פריט';
+  const qtyLabel = `${item.quantity ?? 1} ${item.unit || ''}`.trim();
+  row.innerHTML = `
+    <button class="item-btn-found${item.checked === 1 ? ' active' : ''}" aria-label="נמצא">✓</button>
+    <div class="item-body">
+      <div class="item-name">${esc(displayName)}</div>
+      <div class="item-qty">${esc(qtyLabel)}</div>
+    </div>
+    <button class="item-btn-notfound${item.checked === 2 ? ' active' : ''}" aria-label="לא נמצא">לא נמצא</button>`;
+  row.querySelector('.item-btn-found').addEventListener('click', () =>
+    setItemShopState(item, row, item.checked === 1 ? 0 : 1));
+  row.querySelector('.item-btn-notfound').addEventListener('click', () =>
+    setItemShopState(item, row, item.checked === 2 ? 0 : 2));
+  return row;
+}
+
+async function setItemShopState(item, row, newChecked) {
+  const prev = item.checked;
   item.checked = newChecked;
-  row.classList.toggle('checked', newChecked);
-  checkbox.classList.toggle('checked', newChecked);
-  checkbox.setAttribute('aria-checked', newChecked);
+  const cls = newChecked === 1 ? 'item-found' : newChecked === 2 ? 'item-not-found' : '';
+  row.className = `list-item-row${cls ? ' ' + cls : ''}`;
+  row.querySelector('.item-btn-found').classList.toggle('active', newChecked === 1);
+  row.querySelector('.item-btn-notfound').classList.toggle('active', newChecked === 2);
+  updateProgress(state.currentListItems);
   try {
-    await put(`/api/lists/${state.currentListId}/items/${item.id}`, { checked: newChecked ? 1 : 0 });
-    // Recalculate progress
-    const allRows = document.querySelectorAll('.list-item-row');
-    const checkedCount = document.querySelectorAll('.list-item-row.checked').length;
-    updateProgress(checkedCount, allRows.length);
+    await put(`/api/lists/${state.currentListId}/items/${item.id}`, { checked: newChecked });
   } catch (e) {
     // Revert
-    item.checked = !newChecked;
-    row.classList.toggle('checked', item.checked);
-    checkbox.classList.toggle('checked', item.checked);
+    item.checked = prev;
+    const pc = prev === 1 ? 'item-found' : prev === 2 ? 'item-not-found' : '';
+    row.className = `list-item-row${pc ? ' ' + pc : ''}`;
+    row.querySelector('.item-btn-found').classList.toggle('active', prev === 1);
+    row.querySelector('.item-btn-notfound').classList.toggle('active', prev === 2);
+    updateProgress(state.currentListItems);
     showToast('שגיאה בעדכון פריט', 'error');
   }
 }
@@ -282,10 +332,9 @@ async function toggleItemCheck(item, row, checkbox) {
 async function deleteItem(item, row) {
   try {
     await del(`/api/lists/${state.currentListId}/items/${item.id}`);
+    state.currentListItems = state.currentListItems.filter(i => i.id !== item.id);
     row.remove();
-    const allRows = document.querySelectorAll('.list-item-row');
-    const checkedCount = document.querySelectorAll('.list-item-row.checked').length;
-    updateProgress(checkedCount, allRows.length);
+    updateProgress(state.currentListItems);
     showToast('הפריט הוסר', 'success');
   } catch (e) {
     showToast(`שגיאה: ${e.message}`, 'error');
@@ -855,6 +904,10 @@ document.getElementById('btn-confirm-delete').addEventListener('click', async ()
 document.querySelectorAll('.bottom-nav .nav-item').forEach(btn => {
   btn.addEventListener('click', () => navigate(btn.dataset.view));
 });
+
+// List detail mode tabs
+document.getElementById('mode-tab-build').addEventListener('click', () => setListMode('build'));
+document.getElementById('mode-tab-shop').addEventListener('click',  () => setListMode('shop'));
 
 // Modal close buttons
 document.querySelectorAll('.modal-close').forEach(btn => {

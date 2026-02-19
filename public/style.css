@@ -931,3 +931,92 @@ input, select, textarea { font-family: inherit; }
   color: #888;
   font-size: 0.82rem;
 }
+
+/* ---------- Mode Tabs (Build / Shop) ---------- */
+.mode-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 9px 0;
+  border: 1.5px solid #c8e6c9;
+  border-radius: 20px;
+  background: #fff;
+  color: #555;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mode-tab.active {
+  background: #2e7d32;
+  color: #fff;
+  border-color: #2e7d32;
+}
+
+/* ---------- Shop mode – item states ---------- */
+.list-item-row.item-found {
+  background: #f1f8f1;
+}
+
+.list-item-row.item-found .item-name {
+  text-decoration: line-through;
+  color: #999;
+}
+
+.list-item-row.item-not-found {
+  background: #fff5f5;
+  opacity: 0.72;
+}
+
+.list-item-row.item-not-found .item-name {
+  color: #bbb;
+}
+
+/* ---------- Shop action buttons ---------- */
+.item-btn-found,
+.item-btn-notfound {
+  flex-shrink: 0;
+  border: 1.5px solid;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-weight: 700;
+  transition: background 0.12s, color 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.item-btn-found {
+  font-size: 1rem;
+  border-color: #a5d6a7;
+  background: #fff;
+  color: #388e3c;
+  min-width: 38px;
+}
+
+.item-btn-found.active {
+  background: #2e7d32;
+  color: #fff;
+  border-color: #2e7d32;
+}
+
+.item-btn-notfound {
+  font-size: 0.72rem;
+  border-color: #ffcdd2;
+  background: #fff;
+  color: #c62828;
+}
+
+.item-btn-notfound.active {
+  background: #c62828;
+  color: #fff;
+  border-color: #c62828;
+}
+
+/* ---------- Shop progress breakdown ---------- */
+.progress-found   { color: #2e7d32; font-weight: 700; }
+.progress-missing { color: #c62828; font-weight: 700; }
+.progress-pending { color: #888; }

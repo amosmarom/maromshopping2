@@ -33,10 +33,14 @@
     <!-- ===== VIEW: LIST DETAIL ===== -->
     <section id="view-list-detail" class="view">
       <div class="list-detail-header">
-        <div class="progress-bar-wrap">
+        <div class="mode-tabs">
+          <button class="mode-tab active" id="mode-tab-build">✏️ עריכה</button>
+          <button class="mode-tab" id="mode-tab-shop">🛒 קנייה</button>
+        </div>
+        <div id="list-progress-wrap" class="progress-bar-wrap hidden">
           <div id="list-progress-bar" class="progress-bar"></div>
         </div>
-        <span id="list-progress-text" class="progress-text">0/0 פריטים</span>
+        <span id="list-progress-text" class="progress-text"></span>
       </div>
 
       <div class="add-item-bar">
@@ -50,7 +54,7 @@
       </div>
 
       <div class="list-detail-actions">
-        <button id="btn-complete-list" class="btn-success btn-large">✓ סיום קנייה</button>
+        <button id="btn-complete-list" class="btn-success btn-large hidden">✓ סיום קנייה</button>
         <button id="btn-delete-list" class="btn-danger btn-large">מחק רשימה</button>
       </div>
     </section>
