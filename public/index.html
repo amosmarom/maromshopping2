@@ -54,7 +54,7 @@
       </div>
 
       <div class="list-detail-actions">
-        <button id="btn-complete-list" class="btn-success btn-large hidden">✓ סיום קנייה</button>
+        <button id="btn-complete-list" class="btn-success btn-large hidden">🗄 ארכב רשימה</button>
         <button id="btn-delete-list" class="btn-danger btn-large">מחק רשימה</button>
       </div>
     </section>
@@ -195,6 +195,20 @@
       <div class="modal-actions">
         <button id="btn-confirm-add-item" class="btn-primary">הוסף לרשימה</button>
         <button class="btn-cancel modal-close" data-modal="modal-add-item">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Suggest missing items ===== -->
+  <div id="modal-suggest-items" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-suggest-title">
+    <div class="modal-box">
+      <h2 id="modal-suggest-title" class="modal-title">פריטים שלא נמצאו בקנייה הקודמת</h2>
+      <p id="modal-suggest-subtitle" class="text-muted" style="text-align:center"></p>
+      <p style="font-size:0.85rem;color:#555;text-align:center">להוסיף לרשימה החדשה?</p>
+      <div id="suggest-items-list" class="suggest-items-list"></div>
+      <div class="modal-actions">
+        <button id="btn-confirm-suggestions" class="btn-primary">הוסף לרשימה</button>
+        <button class="btn-cancel modal-close" data-modal="modal-suggest-items">דלג</button>
       </div>
     </div>
   </div>

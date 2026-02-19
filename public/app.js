@@ -161,7 +161,8 @@ document.getElementById('btn-create-list').addEventListener('click', async () =>
     const list = await post('/api/lists', { name });
     closeModal('modal-new-list');
     showToast('הרשימה נוצרה', 'success');
-    openListDetail(list.id, list.name);
+    const suggested = await checkLastShoppingMissing(list.id, list.name);
+    if (!suggested) openListDetail(list.id, list.name);
   } catch (e) {
     showToast(`שגיאה: ${e.message}`, 'error');
   }
@@ -170,6 +171,75 @@ document.getElementById('btn-create-list').addEventListener('click', async () =>
 document.getElementById('new-list-name').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('btn-create-list').click();
 });
+
+// ─── Suggest missing items from last shopping ─────────
+async function checkLastShoppingMissing(listId, listName) {
+  try {
+    const history = await get('/api/history');
+    if (!history.length) return false;
+    const latest = history[0]; // newest first
+    const detail = await get(`/api/history/${latest.id}`);
+    const missing = (detail.items || []).filter(i => i.checked === 2 && i.product_name);
+    if (!missing.length) return false;
+    openSuggestModal(listId, listName, missing, latest.list_name, latest.completed_at);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function openSuggestModal(listId, listName, items, lastListName, completedAt) {
+  const el = document.getElementById('modal-suggest-items');
+  el.dataset.listId   = listId;
+  el.dataset.listName = listName;
+
+  document.getElementById('modal-suggest-subtitle').textContent =
+    `מתוך "${lastListName}" — ${fmtDate(completedAt)}`;
+
+  const container = document.getElementById('suggest-items-list');
+  container.innerHTML = '';
+  items.forEach((item, i) => {
+    const row = document.createElement('div');
+    row.className = 'suggest-item-row';
+    const uid = `sug-${i}`;
+    row.innerHTML = `
+      <input type="checkbox" id="${uid}" checked />
+      <label for="${uid}">${esc(item.product_name)}</label>
+      <span class="suggest-item-qty">${item.quantity ?? 1} ${esc(item.unit || '')}</span>`;
+    // tap the row toggles the checkbox
+    row.addEventListener('click', e => {
+      if (e.target.tagName !== 'INPUT') row.querySelector('input').click();
+    });
+    container.appendChild(row);
+  });
+
+  openModal('modal-suggest-items');
+}
+
+document.getElementById('btn-confirm-suggestions').addEventListener('click', async () => {
+  const el       = document.getElementById('modal-suggest-items');
+  const listId   = parseInt(el.dataset.listId);
+  const listName = el.dataset.listName;
+  const checked  = el.querySelectorAll('input[type="checkbox"]:checked');
+  closeModal('modal-suggest-items');
+
+  if (checked.length) {
+    const names = Array.from(checked).map(cb =>
+      cb.closest('.suggest-item-row').querySelector('label').textContent);
+    await Promise.all(names.map(name =>
+      post(`/api/lists/${listId}/items`, { custom_name: name, quantity: 1, unit: 'יחידה' }).catch(() => {})));
+    showToast(`${checked.length} פריטים נוספו לרשימה`, 'success');
+  }
+
+  openListDetail(listId, listName);
+});
+
+// Skip suggestion → go straight to list
+document.querySelector('[data-modal="modal-suggest-items"].btn-cancel')
+  ?.addEventListener('click', () => {
+    const el = document.getElementById('modal-suggest-items');
+    openListDetail(parseInt(el.dataset.listId), el.dataset.listName);
+  });
 
 // ═══════════════════════════════════════════════════════
 //  LIST DETAIL VIEW
@@ -206,7 +276,9 @@ function setListMode(mode) {
   document.getElementById('mode-tab-shop').classList.toggle('active', mode === 'shop');
   document.querySelector('.add-item-bar').classList.toggle('hidden', mode === 'shop');
   document.getElementById('item-search-results').classList.add('hidden');
+  // In shop mode: only archive button. In build mode: only delete button.
   document.getElementById('btn-complete-list').classList.toggle('hidden', mode === 'build');
+  document.getElementById('btn-delete-list').classList.toggle('hidden', mode === 'shop');
   document.getElementById('list-progress-wrap').classList.toggle('hidden', mode === 'build');
   renderListItems(state.currentListItems);
 }
